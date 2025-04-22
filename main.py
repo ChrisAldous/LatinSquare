@@ -1,4 +1,10 @@
 import copy
+import csv
+import random
+import math
+import numpy as np
+import time
+
 def setup_square(square):
     latin_square = square
 
@@ -89,7 +95,208 @@ def recursive_solve(square):
 
     return None
 
+def getTestCase(num = 0):
+    if(num < 1 or num > 30):
+        num = random.randrange(1,28)
+    print("Getting id number:",num)
+    with open("dataset.csv","r") as f:
+        count = 0
+        reader = csv.reader(f)
+        for row in reader:
+            if(count == num):
+                square = []
+                solution_square = []
+                tempcount = 0
+                tempcount2 = 0
+                square_size = int(math.sqrt(len(row[1])))
+                for i in range(square_size):
+                    square.append([])
+                    solution_square.append([])
+                for i in row[1]:
+                        square[tempcount].append(i)
+                        tempcount2+=1
+                        if(tempcount2 >= square_size):
+                            tempcount2 = 0
+                            tempcount += 1
+                tempcount = 0
+                tempcount2 = 0
+                for i in row[2]:
+                        solution_square[tempcount].append(i)
+                        tempcount2+=1
+                        if(tempcount2 >= square_size):
+                            tempcount2 = 0
+                            tempcount += 1
+                return square,solution_square
+            count+=1
+    return [], []
 
+def compareSquares(square1,square2):
+    for i in square1:
+        for j in i:
+            print(end= "[")
+            print(j, end ="]")
+        print()
+    print()
+
+    for i in square2:
+        for j in i:
+            print(end= "[")
+            print(j, end ="]")
+        print()
+    print("Match:",square1 == square2)
+    count = 0
+    for i in range(0,len(square1)):
+        for j in range(0,len(square1)):
+            if(str(square1[i][j]) == str(square2[i][j])):
+                count+=1
+    print("Matched percent:",count/len(square1)**2*100)
+
+#optimizing based on correct cells. I think this should be better but I'm honestly not smart enough to figure it out completely I can't believe it's even working 
+def LPRoundingApproximation(initial_grid):
+    n = len(initial_grid) 
+    grid = np.full((n, n), 0)
+    for i in range(n):
+        for j in range(n):
+            val = initial_grid[i][j]
+            if val != '.':
+                grid[i,j] = int(val)
+    var_index = {}
+    idx = 0
+    for i in range(n):
+        for j in range(n):
+            for k in range(1, n+1):
+                var_index[(i,j,k)] = idx
+                idx += 1
+    A_eq = []
+    b_eq = []
+    for i in range(n):
+        for j in range(n):
+            row = np.zeros(n**3)
+            if grid[i,j] == 0:
+                for k in range(1, n+1):
+                    row[var_index[(i,j,k)]] = 1
+            else:
+                row[var_index[(i,j,grid[i,j])]] = 1
+            A_eq.append(row)
+            b_eq.append(1)
+    for i in range(n):
+        for k in range(1, n+1):
+            row = np.zeros(n**3)
+            count = 0
+            for j in range(n):
+                if grid[i,j] == k:
+                    count += 1
+                elif grid[i,j] == 0:
+                    row[var_index[(i,j,k)]] = 1
+            if count == 0:
+                A_eq.append(row)
+                b_eq.append(1)
+    for j in range(n):
+        for k in range(1, n+1):
+            row = np.zeros(n**3)
+            count = 0
+            for i in range(n):
+                if grid[i,j] == k:
+                    count += 1
+                elif grid[i,j] == 0:
+                    row[var_index[(i,j,k)]] = 1
+            if count == 0:
+                A_eq.append(row)
+                b_eq.append(1)
+        c = np.zeros(n**3)
+        for (i,j,k), idx in var_index.items():
+            if grid[i,j] == 0:
+                row_missing = n - len(set(grid[i,:])) - 1
+                col_missing = n - len(set(grid[:,j])) - 1
+                c[idx] = row_missing + col_missing   
+    num_vars = n**3
+    num_constraints = len(b_eq)
+    tableau = np.zeros((num_constraints+1, num_vars + num_constraints + 1))
+    tableau[:-1, :num_vars] = A_eq
+    tableau[:-1, num_vars:num_vars+num_constraints] = np.eye(num_constraints)
+    tableau[:-1, -1] = b_eq
+    tableau[-1, :num_vars] = c
+    basis = list(range(num_vars, num_vars + num_constraints))
+    for _ in range(5000):
+        entering = np.argmin(tableau[-1, :-1])
+        if tableau[-1, entering] >= -1e-8:
+            break
+        ratios = np.inf * np.ones(num_constraints)
+        for i in range(num_constraints):
+            if tableau[i, entering] > 1e-8:
+                ratios[i] = tableau[i, -1] / tableau[i, entering]
+        leaving = np.argmin(ratios)
+        if ratios[leaving] == np.inf:
+            raise ValueError("Problem is unbounded - check constraints")
+        basis[leaving] = entering
+        pivot_val = tableau[leaving, entering]
+        tableau[leaving] /= pivot_val
+        for i in range(num_constraints+1):
+            if i != leaving:
+                tableau[i] -= tableau[i, entering] * tableau[leaving]
+    solution = np.zeros(n**3)
+    for i in range(num_constraints):
+        if basis[i] < n**3:
+            solution[basis[i]] = tableau[i, -1]
+    empty_cells = [(i,j) for i in range(n) for j in range(n) if grid[i,j] == 0]
+    best_result = np.copy(grid)
+    best_empty = n*n 
+    for attempt in range(10):
+        temp = np.copy(grid)
+        np.random.shuffle(empty_cells)
+        for i, j in empty_cells:
+            valid_ks = []
+            weights = []
+            for k in range(1, n+1):
+                if k not in temp[i,:] and k not in temp[:,j]:
+                    idx = var_index[(i,j,k)]
+                    valid_ks.append(k)
+                    weights.append(max(solution[idx], 1e-6))
+            if valid_ks:
+                weights = np.exp(weights) / np.sum(np.exp(weights))
+                chosen_k = np.random.choice(valid_ks, p=weights)
+                temp[i,j] = chosen_k
+        current_empty = np.sum(temp == 0)
+        if current_empty == 0:
+            return temp.tolist()
+        if current_empty < best_empty:
+            best_result = temp
+            best_empty = current_empty
+    for i in range(n):
+        for j in range(n):
+            if best_result[i,j] == 0:
+                available = set(range(1, n+1)) - set(best_result[i,:]) - set(best_result[:,j])
+                if available:
+                    symbol_counts = {k: np.sum(best_result == k) for k in available}
+                    best_result[i,j] = min(symbol_counts.items(), key=lambda x: x[1])[0]
+
+    return best_result.tolist()
+
+def testLP():
+    print("Starting LP approximation test")
+    test, test_solution = getTestCase(10)
+    test2,test_solution2 = getTestCase(28)
+    test3,test_solution3 = getTestCase(29)
+    runningTime = 0
+    for i in range(5):
+        startTime = time.perf_counter()
+        temp = LPRoundingApproximation(test)
+        stopTime = time.perf_counter()
+        runningTime+= stopTime-startTime
+        compareSquares(temp,test_solution)
+        startTime = time.perf_counter()
+        temp = LPRoundingApproximation(test2)
+        stopTime = time.perf_counter()
+        runningTime+= stopTime-startTime
+        compareSquares(temp,test_solution2)
+        startTime = time.perf_counter()
+        temp = LPRoundingApproximation(test3)
+        stopTime = time.perf_counter()
+        runningTime+= stopTime-startTime
+        compareSquares(temp,test_solution3)
+
+    print("Ending LP approximation test")
+    return runningTime/15*1000
 if __name__ == "__main__":
     # all_symbols = {"1", "2", "3", "4"}
     #
@@ -128,3 +335,4 @@ if __name__ == "__main__":
     else:
         for row in range(len(the_latin_square)):
             print(the_latin_square[row])
+    print("The average running time for LP Approximation was: ",testLP(),"ms")
