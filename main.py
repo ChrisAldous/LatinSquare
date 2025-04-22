@@ -98,10 +98,10 @@ def recursive_solve(square):
 def validate_latin_square(square):
     n = len(square)
     all_symbols = set(square[0])
-
+    
     for row in range(n):
         row_sym = set(square[row])
-        if row_symb != all_symbols:
+        if row_sym != all_symbols:
             return False
 
     for col in range(n):
@@ -130,6 +130,9 @@ def getTestCase(num = 0):
                     square.append([])
                     solution_square.append([])
                 for i in row[1]:
+                        if(i == '.'):
+                            i =0
+                        i =int(i)
                         square[tempcount].append(i)
                         tempcount2+=1
                         if(tempcount2 >= square_size):
@@ -138,6 +141,9 @@ def getTestCase(num = 0):
                 tempcount = 0
                 tempcount2 = 0
                 for i in row[2]:
+                        if(i == '.'):
+                            i =0
+                        i =int(i)
                         solution_square[tempcount].append(i)
                         tempcount2+=1
                         if(tempcount2 >= square_size):
@@ -147,28 +153,46 @@ def getTestCase(num = 0):
             count+=1
     return [], []
 
-def compareSquares(square1,square2):
-    for i in square1:
-        for j in i:
-            print(end= "[")
-            print(j, end ="]")
-        print()
-    print()
-
+def compareSquares(square1,square2): #pass the changed latin square and the original to verify that it is a latinsquare and the partial square known locations weren't changed
+    matched = True
+    print("Before:")
     for i in square2:
         for j in i:
             print(end= "[")
             print(j, end ="]")
         print()
-    print("Match:",square1 == square2)
+    print("After:")
+    for i in square1:
+        for j in i:
+            print(end= "[")
+            print(j, end ="]")
+        print()
+    n = len(square1)
+    for row in range(n):
+        row_sym = [i for i in square1[row] if i != 0]
+        if len(row_sym) != len(set(row_sym)):
+            matched = False
+        if row_sym and (min(row_sym) < 1 or max(row_sym) > n):
+            matched = False
+    for col in range(n):
+        col_sym = [square1[row][col] for row in range(n) if square1[row][col] != 0]
+        if len(col_sym) != len(col_sym):
+            matched = False
+        if col_sym and (min(col_sym) < 1 or max(col_sym) > n):
+            matched = False
+    print("Valid latin square (so far):",matched)
     count = 0
     for i in range(0,len(square1)):
         for j in range(0,len(square1)):
-            if(str(square1[i][j]) == str(square2[i][j])):
+            if(str(square1[i][j]) != str(square2[i][j]) and square2[i][j] != 0):
+                raise ValueError("Square1 has changed part of the provided partially complete")
+            if(square1[i][j] != 0):
                 count+=1
-    print("Matched percent:",count/len(square1)**2*100)
+    print("Filled percent:",count/len(square1)**2*100)
+    print()
+    return count/len(square1)**2*100
 
-#optimizing based on correct cells. I think this should be better but I'm honestly not smart enough to figure it out completely I can't believe it's even working 
+#optimizing based on filled cells. Always returns a valid partial or complete square. I think this should be better but I'm honestly not smart enough to figure it out completely I can't believe it's even working 
 def LPRoundingApproximation(initial_grid):
     n = len(initial_grid) 
     grid = np.full((n, n), 0)
@@ -295,24 +319,28 @@ def testLP():
     test2,test_solution2 = getTestCase(28)
     test3,test_solution3 = getTestCase(29)
     runningTime = 0
+    filledPercent = 0
     for i in range(5):
         startTime = time.perf_counter()
         temp = LPRoundingApproximation(test)
         stopTime = time.perf_counter()
         runningTime+= stopTime-startTime
-        compareSquares(temp,test_solution)
+        filledPercent += compareSquares(temp,test)
         startTime = time.perf_counter()
         temp = LPRoundingApproximation(test2)
         stopTime = time.perf_counter()
         runningTime+= stopTime-startTime
-        compareSquares(temp,test_solution2)
+        filledPercent +=compareSquares(temp,test2)
         startTime = time.perf_counter()
         temp = LPRoundingApproximation(test3)
         stopTime = time.perf_counter()
         runningTime+= stopTime-startTime
-        compareSquares(temp,test_solution3)
-
+        filledPercent += compareSquares(temp,test3)
+        
+        
     print("Ending LP approximation test")
+    filledPercent = filledPercent/15
+    print("The average filled percent was: ", int(filledPercent), end = "%\n")
     return runningTime/15*1000
 if __name__ == "__main__":
     # all_symbols = {"1", "2", "3", "4"}
@@ -343,13 +371,13 @@ if __name__ == "__main__":
         ["_", "_", "1", "_", "_"],
         ["4", "_", "_", "3", "1"]
     ]
-
     the_latin_square = setup_square(latin_square)
     the_latin_square = easy_solve(the_latin_square)
-
     if the_latin_square is None:
         print("There is nothing")
     else:
         for row in range(len(the_latin_square)):
             print(the_latin_square[row])
-    print("The average running time for LP Approximation was: ",testLP(),"ms")
+
+    
+    print("The average running time for LP Approximation was:",int(testLP()),"ms")
