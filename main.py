@@ -95,6 +95,23 @@ def recursive_solve(square):
 
     return None
 
+def validate_latin_square(square):
+    n = len(square)
+    all_symbols = set(square[0])
+
+    for row in range(n):
+        row_sym = set(square[row])
+        if row_symb != all_symbols:
+            return False
+
+    for col in range(n):
+        col_sym = set(square[row][col] for row in range(n))
+        if col_sym != all_symbols:
+            return False
+
+    return True
+
+
 def getTestCase(num = 0):
     if(num < 1 or num > 30):
         num = random.randrange(1,28)
