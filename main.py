@@ -112,85 +112,64 @@ def validate_latin_square(square):
     return True
 
 
-def getTestCase(num = 0):
-    if(num < 1 or num > 30):
-        num = random.randrange(1,28)
-    print("Getting id number:",num)
-    with open("dataset.csv","r") as f:
+def getTestCase(testfile):    
+    with open(testfile,"r") as f:
         count = 0
         reader = csv.reader(f)
+        square = []
         for row in reader:
-            if(count == num):
-                square = []
-                solution_square = []
-                tempcount = 0
-                tempcount2 = 0
-                square_size = int(math.sqrt(len(row[1])))
-                for i in range(square_size):
-                    square.append([])
-                    solution_square.append([])
-                for i in row[1]:
-                        if(i == '.'):
-                            i =0
-                        i =int(i)
-                        square[tempcount].append(i)
-                        tempcount2+=1
-                        if(tempcount2 >= square_size):
-                            tempcount2 = 0
-                            tempcount += 1
-                tempcount = 0
-                tempcount2 = 0
-                for i in row[2]:
-                        if(i == '.'):
-                            i =0
-                        i =int(i)
-                        solution_square[tempcount].append(i)
-                        tempcount2+=1
-                        if(tempcount2 >= square_size):
-                            tempcount2 = 0
-                            tempcount += 1
-                return square,solution_square
+            square.append([])
+            print(row,len(row))
+            for i in row:
+                square[count].append(int(i))
             count+=1
-    return [], []
+        print(square)
+        return square
+    return []
 
-def compareSquares(square1,square2): #pass the changed latin square and the original to verify that it is a latinsquare and the partial square known locations weren't changed
+def compareSquares(afterSquare,beforeSquare): #pass the changed latin square and the original to verify that it is a latinsquare and the partial square known locations weren't changed
     matched = True
+    lengthFix = len(afterSquare)
+    padding = 1
     print("Before:")
-    for i in square2:
+    while(lengthFix >= 10):
+        lengthFix = lengthFix %10
+        padding+= 1
+    for i in beforeSquare:
         for j in i:
             print(end= "[")
-            print(j, end ="]")
+            print(str(j).center(padding," "), end= "]")
         print()
     print("After:")
-    for i in square1:
+    for i in afterSquare:
         for j in i:
             print(end= "[")
-            print(j, end ="]")
+            print(str(j).center(padding," "), end= "]")
         print()
-    n = len(square1)
+    n = len(afterSquare)
     for row in range(n):
-        row_sym = [i for i in square1[row] if i != 0]
+        row_sym = [i for i in afterSquare[row] if i != 0]
         if len(row_sym) != len(set(row_sym)):
             matched = False
         if row_sym and (min(row_sym) < 1 or max(row_sym) > n):
             matched = False
     for col in range(n):
-        col_sym = [square1[row][col] for row in range(n) if square1[row][col] != 0]
+        col_sym = [afterSquare[row][col] for row in range(n) if afterSquare[row][col] != 0]
         if len(col_sym) != len(col_sym):
             matched = False
         if col_sym and (min(col_sym) < 1 or max(col_sym) > n):
             matched = False
-    print("Valid latin square (so far):",matched)
+    print("Valid latin square (currently):",matched)
     count = 0
-    for i in range(0,len(square1)):
-        for j in range(0,len(square1)):
-            if(str(square1[i][j]) != str(square2[i][j]) and square2[i][j] != 0):
+    for i in range(0,len(afterSquare)):
+        for j in range(0,len(afterSquare)):
+            if(str(afterSquare[i][j]) != str(beforeSquare[i][j]) and beforeSquare[i][j] != 0):
                 raise ValueError("Square1 has changed part of the provided partially complete")
-            if(square1[i][j] != 0):
+            if(afterSquare[i][j] != 0):
                 count+=1
-    print("Filled percent:",count/len(square1)**2*100)
+    print("Filled percent:",int(count/len(afterSquare)**2*100), end="%\n")
     print()
-    return count/len(square1)**2*100
+    return count/len(afterSquare)**2*100
 
 #optimizing based on filled cells. Always returns a valid partial or complete square. I think this should be better but I'm honestly not smart enough to figure it out completely I can't believe it's even working 
 def LPRoundingApproximation(initial_grid):
@@ -315,9 +294,9 @@ def LPRoundingApproximation(initial_grid):
 
 def testLP():
     print("Starting LP approximation test")
-    test, test_solution = getTestCase(10)
-    test2,test_solution2 = getTestCase(28)
-    test3,test_solution3 = getTestCase(29)
+    test= getTestCase("dataset1_5x5.csv")
+    test2= getTestCase("dataset2_10x10.csv")
+    test3 = getTestCase("dataset3_15x15.csv")
     runningTime = 0
     filledPercent = 0
     for i in range(5):
@@ -379,5 +358,6 @@ if __name__ == "__main__":
         for row in range(len(the_latin_square)):
             print(the_latin_square[row])
 
-    
     print("The average running time for LP Approximation was:",int(testLP()),"ms")
+    print(9 % 10)
+
