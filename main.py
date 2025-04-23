@@ -1,13 +1,13 @@
 import copy
 import csv
 import random
-import math
+import sys
 import numpy as np
 import time
-
+sys.setrecursionlimit(20000) 
 def setup_square(square):
-    latin_square = square
-
+    latin_square = copy.deepcopy(square)
+    all_symbols = {str(i) for i in range(1, len(square)+1)}
     n = len(latin_square)
     # getting all symbols already within each row and removing them from the set of all symbols to fill in '_'
     for row in range(n):
@@ -49,7 +49,6 @@ def easy_solve(square):
                     latin_square[row][col] = value
                     changed = True
 
-                    # After placing, eliminate from row and column
                     for c in range(n):
                         if isinstance(latin_square[row][c], set):
                             latin_square[row][c].discard(value)
@@ -57,13 +56,13 @@ def easy_solve(square):
                         if isinstance(latin_square[r][col], set):
                             latin_square[r][col].discard(value)
 
-    return recursive_solve(latin_square)
+    return latin_square
 
 
 def recursive_solve(square):
-    latin_square = square
-    n = len(latin_square)
+    latin_square = easy_solve(copy.deepcopy(square))
 
+    n = len(latin_square)
     solved = all(isinstance(latin_square[row][col], str) for row in range(n) for col in range(n))
     if solved:
         return latin_square
@@ -76,6 +75,9 @@ def recursive_solve(square):
                 min_size = len(latin_square[row][col])
                 guess_row, guess_col = row, col
 
+    if guess_row == -1:
+        return None
+
     for option in latin_square[guess_row][guess_col]:
         new_square = copy.deepcopy(latin_square)
         new_square[guess_row][guess_col] = option
@@ -87,43 +89,49 @@ def recursive_solve(square):
             if isinstance(new_square[r][guess_col], set):
                 new_square[r][guess_col].discard(option)
 
-        new_square = easy_solve(new_square)
-
-        result = recursive_solve(new_square)
-        if result is not None:
-            return result
+        attempt = recursive_solve(new_square)
+        if attempt is not None:
+            return attempt
 
     return None
 
 def validate_latin_square(square):
     n = len(square)
     all_symbols = set(square[0])
-    
+
     for row in range(n):
-        row_sym = set(square[row])
-        if row_sym != all_symbols:
+        row_symbols = set(square[row])
+        if row_symbols != all_symbols:
             return False
 
     for col in range(n):
-        col_sym = set(square[row][col] for row in range(n))
-        if col_sym != all_symbols:
+        col_symbols = set(square[row][col] for row in range(n))
+        if col_symbols != all_symbols:
             return False
 
     return True
 
 
-def getTestCase(testfile):    
+
+def getTestCase(testfile, forexact = False):    
     with open(testfile,"r") as f:
         count = 0
         reader = csv.reader(f)
         square = []
         for row in reader:
             square.append([])
-            print(row,len(row))
             for i in row:
-                square[count].append(int(i))
+                if(forexact):
+                    square[count].append(str(i))
+                else:
+                    square[count].append(int(i))
             count+=1
-        print(square)
+        if(forexact):
+            for i in range(len(square)):
+                for x in range(len(square)):
+                    if(square[i][x] == "0"):
+                        square[i][x] = "_"
+                        
         return square
     return []
 
@@ -292,36 +300,100 @@ def LPRoundingApproximation(initial_grid):
 
     return best_result.tolist()
 
-def testLP():
-    print("Starting LP approximation test")
-    test= getTestCase("dataset1_5x5.csv")
-    test2= getTestCase("dataset2_10x10.csv")
-    test3 = getTestCase("dataset3_15x15.csv")
+def testLP(filename):
+    test= getTestCase(filename)
     runningTime = 0
     filledPercent = 0
     for i in range(5):
+        temp = copy.deepcopy(test)
         startTime = time.perf_counter()
-        temp = LPRoundingApproximation(test)
+        temp = LPRoundingApproximation(temp)
         stopTime = time.perf_counter()
         runningTime+= stopTime-startTime
         filledPercent += compareSquares(temp,test)
+    filledPercent = filledPercent/5
+    
+    return int(runningTime/5*1000), int(filledPercent)
+def showSquare(square):
+    if square is None:
+        print("There is nothing")
+    else:
+        for row in range(len(square)):
+            print(square[row])
+def testExact(filename):
+    test= getTestCase(filename,True)
+    runningTime = 0
+    for i in range(5):
+        temp = copy.deepcopy(test)
         startTime = time.perf_counter()
-        temp = LPRoundingApproximation(test2)
+        the_latin_square = setup_square(temp)
+        the_latin_square = easy_solve(the_latin_square)
+        the_latin_square = recursive_solve(the_latin_square)
         stopTime = time.perf_counter()
         runningTime+= stopTime-startTime
-        filledPercent +=compareSquares(temp,test2)
-        startTime = time.perf_counter()
-        temp = LPRoundingApproximation(test3)
-        stopTime = time.perf_counter()
-        runningTime+= stopTime-startTime
-        filledPercent += compareSquares(temp,test3)
-        
-        
-    print("Ending LP approximation test")
-    filledPercent = filledPercent/15
-    print("The average filled percent was: ", int(filledPercent), end = "%\n")
-    return runningTime/15*1000
+        showSquare(the_latin_square)
+    return int(runningTime/5*1000)
+def load_latin_square_from_csv(filepath):
+    with open(filepath, 'r') as f:
+        reader = csv.reader(f)
+        return [[int(cell) for cell in row] for row in reader]
+
+def is_valid(grid, row, col, symbol):
+    n = len(grid)
+    for i in range(n):
+        if grid[row][i] == symbol or grid[i][col] == symbol:
+            return False
+    return True
+
+def greedy_latin_completion(grid):
+    n = len(grid)
+    start = time.perf_counter()
+    filled = 0
+
+    # List of empty cells
+    empty = [(r, c) for r in range(n) for c in range(n) if grid[r][c] == 0]
+    random.shuffle(empty)  # for conflicts
+
+    for row, col in empty:
+        for symbol in range(1, n + 1):
+            if is_valid(grid, row, col, symbol):
+                grid[row][col] = symbol
+                filled += 1
+                break
+
+    end = time.perf_counter()
+    return grid, filled, end - start
+
+def generate_partial_latin_square(n, fill_percent=0.5):
+    grid = [[0 for _ in range(n)] for _ in range(n)]
+    symbols = list(range(1, n + 1))
+
+    for i in range(n):
+        row_symbols = symbols.copy()
+        random.shuffle(row_symbols)
+        for j in range(n):
+            if random.random() < fill_percent:
+                if row_symbols[j] not in grid[i] and all(row_symbols[j] != grid[k][j] for k in range(n)):
+                    grid[i][j] = row_symbols[j]
+    return grid
+
+def run_trials(algorithm_fn, grid, runs=5):
+    filled_list = []
+    time_list = []
+
+    for _ in range(runs):
+        trial_grid = [row[:] for row in grid]  # Deep copy
+        _, filled, t = algorithm_fn(trial_grid)
+        filled_list.append(filled)
+        time_list.append(t)
+
+    avg_filled = sum(filled_list) / runs
+    avg_time = sum(time_list) / runs
+    return avg_filled, avg_time
+
 if __name__ == "__main__":
+
+                    
     # all_symbols = {"1", "2", "3", "4"}
     #
     # latin_square = [
@@ -340,24 +412,38 @@ if __name__ == "__main__":
     #     for row in range(len(the_latin_square)):
     #         print(the_latin_square[row])
 
+    
 
-    all_symbols = {"1", "2", "3", "4", "5"}
 
-    latin_square = [
-        ["4", "_", "_", "3", "5"],
-        ["1", "3", "_", "5", "2"],
-        ["_", "4", "_", "1", "_"],
-        ["_", "_", "1", "_", "_"],
-        ["4", "_", "_", "3", "1"]
-    ]
-    the_latin_square = setup_square(latin_square)
-    the_latin_square = easy_solve(the_latin_square)
-    if the_latin_square is None:
-        print("There is nothing")
-    else:
-        for row in range(len(the_latin_square)):
-            print(the_latin_square[row])
+    
+    time_exact_ms = testExact("dataset1_5x5.csv")
+    time_exact_ms2 = testExact("dataset2_10x10.csv")
+    time_exact_ms3 = testExact("dataset3_15x15.csv")
+    time_ms,filled_percent = testLP("dataset1_5x5.csv")
+    time_ms2,filled_percent2 = testLP("dataset2_10x10.csv")
+    time_ms3,filled_percent3 = testLP("dataset3_15x15.csv")
+    print("\nOn 5x5 the average running time for Exact was:",time_exact_ms,"ms")
+    print("\nOn 10x10 the average running time for Exact  was:",time_exact_ms2,"ms")
+    print("\nOn 15x15 the average running time for Exact  was:",time_exact_ms3,"ms")
+    print("\nOn 5x5 the average filled percent was: ", filled_percent, end = "%\n")
+    print("On 5x5 the average running time for LP Approximation was:",int(time_ms),"ms")
+    print("\nOn 10x10 the average filled percent was: ", filled_percent2, end = "%\n")
+    print("On 10x10 the average running time for LP Approximation was:",int(time_ms2),"ms")
+    print("\nOn 15x15 the average filled percent was: ", filled_percent3, end = "%\n")
+    print("On 15x15 the average running time for LP Approximation was:",int(time_ms3),"ms")
 
-    print("The average running time for LP Approximation was:",int(testLP()),"ms")
-    print(9 % 10)
+    #print("The average running time for Exact was",time_exact_ms,"ms")
+    dataset_files = {
+        "5x5": "dataset1_5x5.csv",
+        "10x10": "dataset2_10x10.csv",
+        "15x15": "dataset3_15x15.csv"
+    }
+    for label, filename in dataset_files.items():
+        print(f"\nRunning for dataset {label}...")
+        grid = load_latin_square_from_csv(filename)
+        avg_filled, avg_time = run_trials(greedy_latin_completion, grid)
+        print(f"Avg. filled: {avg_filled:.2f} / {len(grid) ** 2}")
+        print(f"Avg. time: {avg_time:.4f} sec")
+
+
 
