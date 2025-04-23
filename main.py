@@ -113,11 +113,8 @@ def validate_latin_square(square):
 
 
 
-<<<<<<< HEAD
+
 def getTestCase(testfile, forexact = False):    
-=======
-def getTestCase(testfile):    
->>>>>>> fe130fe9e04e3d2c337420ed3be28fa498f441cd
     with open(testfile,"r") as f:
         count = 0
         reader = csv.reader(f)
