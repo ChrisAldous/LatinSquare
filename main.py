@@ -49,7 +49,6 @@ def easy_solve(square):
                     latin_square[row][col] = value
                     changed = True
 
-                    # After placing, eliminate from row and column
                     for c in range(n):
                         if isinstance(latin_square[row][c], set):
                             latin_square[row][c].discard(value)
@@ -57,13 +56,13 @@ def easy_solve(square):
                         if isinstance(latin_square[r][col], set):
                             latin_square[r][col].discard(value)
 
-    return recursive_solve(latin_square)
+    return latin_square
 
 
 def recursive_solve(square):
-    latin_square = square
-    n = len(latin_square)
+    latin_square = easy_solve(copy.deepcopy(square))
 
+    n = len(latin_square)
     solved = all(isinstance(latin_square[row][col], str) for row in range(n) for col in range(n))
     if solved:
         return latin_square
@@ -76,6 +75,9 @@ def recursive_solve(square):
                 min_size = len(latin_square[row][col])
                 guess_row, guess_col = row, col
 
+    if guess_row == -1:
+        return None
+
     for option in latin_square[guess_row][guess_col]:
         new_square = copy.deepcopy(latin_square)
         new_square[guess_row][guess_col] = option
@@ -87,29 +89,28 @@ def recursive_solve(square):
             if isinstance(new_square[r][guess_col], set):
                 new_square[r][guess_col].discard(option)
 
-        new_square = easy_solve(new_square)
-
-        result = recursive_solve(new_square)
-        if result is not None:
-            return result
+        attempt = recursive_solve(new_square)
+        if attempt is not None:
+            return attempt
 
     return None
 
 def validate_latin_square(square):
     n = len(square)
     all_symbols = set(square[0])
-    
+
     for row in range(n):
-        row_sym = set(square[row])
-        if row_sym != all_symbols:
+        row_symbols = set(square[row])
+        if row_symbols != all_symbols:
             return False
 
     for col in range(n):
-        col_sym = set(square[row][col] for row in range(n))
-        if col_sym != all_symbols:
+        col_symbols = set(square[row][col] for row in range(n))
+        if col_symbols != all_symbols:
             return False
 
     return True
+
 
 
 def getTestCase(testfile):    
