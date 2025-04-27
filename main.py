@@ -112,9 +112,6 @@ def validate_latin_square(square):
 
     return True
 
-
-
-
 def getTestCase(testfile, forexact = False):    
     with open(testfile,"r") as f:
         count = 0
@@ -171,12 +168,16 @@ def compareSquares(afterSquare,beforeSquare): #pass the changed latin square and
             matched = False
     print("Valid latin square (currently):",matched)
     count = 0
+    original_count = 0
     for i in range(0,len(afterSquare)):
         for j in range(0,len(afterSquare)):
             if(str(afterSquare[i][j]) != str(beforeSquare[i][j]) and beforeSquare[i][j] != 0):
                 raise ValueError("Square1 has changed part of the provided partially complete")
+            if(beforeSquare[i][j] != 0):
+                original_count +=1
             if(afterSquare[i][j] != 0):
                 count+=1
+    print("Filled percent original",int(original_count/len(afterSquare)**2*100), end="%\n")
     print("Filled percent:",int(count/len(afterSquare)**2*100), end="%\n")
     print()
     return count/len(afterSquare)**2*100
@@ -307,7 +308,7 @@ def testLP(filename):
     runningTime = 0
     filledPercent = 0
     for i in range(5):
-        temp = copy.deepcopy(test)
+        temp = test
         startTime = time.perf_counter()
         temp = LPRoundingApproximation(temp)
         stopTime = time.perf_counter()
@@ -326,7 +327,7 @@ def testExact(filename):
     test= getTestCase(filename,True)
     runningTime = 0
     for i in range(5):
-        temp = copy.deepcopy(test)
+        temp = test
         startTime = time.perf_counter()
         the_latin_square = setup_square(temp)
         the_latin_square = easy_solve(the_latin_square)
@@ -393,103 +394,97 @@ def run_trials(algorithm_fn, grid, runs=5):
     avg_time = sum(time_list) / runs
     return avg_filled, avg_time
 
-def threesat_schoning(square, max_flip=1000, max_restarts=10):
-    square = [row[:] for row in square]
-    for i in range(len(square)):
-        for j in range(len(square)):
-            if square[i][j] != 0:
-                val = square[i][j]
-                for x in range(len(square)):
-                    if isinstance(square[i][x], set) and val in square[i][x]:
-                        square[i][x].remove(val)
-                    if isinstance(square[x][j], set) and val in square[x][j]:
-                        square[x][j].remove(val)
+def threesat_schoning(square, max_restarts=10):
     variables = {}
     id = 1
-    n = len(square)
-    for i in range(n):
-        for j in range(n):
-            for k in range(1, n+1):
+    for i in range(len(square)):
+        for j in range(len(square)):
+            for k in range(1, len(square)+1):
                 variables[(i, j, k)] = id
                 id += 1
     clauses = []
-    s = max(variables.values()) + 1
     presolved = set()
-    for i in range(n):
-        for j in range(n):
+    presolved_vars = set()
+    for i in range(len(square)):
+        for j in range(len(square)):
             if square[i][j] != 0:
                 k = square[i][j]
                 presolved.add((i, j))
-                clauses.append([variables[(i, j, k)]]) 
-    for i in range(n):
-        for j in range(n):
-            if (i, j) in presolved:
-                continue
-            cell_vars = [variables[(i, j, k)] for k in range(1, n+1)]
-            if len(cell_vars) <= 3:
-                clauses.append(cell_vars)
+                clauses.append([variables[(i, j, k)]])
+                for other_k in range(1, len(square)+1):
+                    if other_k != k:
+                        clauses.append([-variables[(i, j, other_k)]])
+                for k_val in range(1, len(square)+1):
+                    presolved_vars.add(variables[(i, j, k_val)])
             else:
-                clauses.append([cell_vars[0], cell_vars[1], s])
-                for idx in range(2, len(cell_vars)-1):
-                    clauses.append([-s, cell_vars[idx], s+1])
-                    s += 1
-                clauses.append([-s, cell_vars[-2], cell_vars[-1]])
-                s += 1
-            for k1 in range(1, n+1):
-                for k2 in range(k1+1, n+1):
-                    clauses.append([-variables[(i, j, k1)], -variables[(i, j, k2)]])
-    for i in range(n):
-        for k in range(1, n+1):
-            for j1 in range(n):
-                for j2 in range(j1+1, n):
+                cell_vars = [variables[(i, j, k)] for k in range(1, len(square)+1)]
+                while len(cell_vars) > 3:
+                    new_var = id
+                    id += 1
+                    clauses.append([cell_vars[0], cell_vars[1], new_var])
+                    cell_vars = [new_var] + cell_vars[2:]
+                clauses.append(cell_vars)
+                for k1 in range(1, len(square)+1):
+                    for k2 in range(k1+1, len(square)+1):
+                        clauses.append([-variables[(i, j, k1)], -variables[(i, j, k2)]])
+    for k in range(1, len(square)+1):
+        for i in range(len(square)):
+            for j1 in range(len(square)):
+                for j2 in range(j1+1, len(square)):
                     clauses.append([-variables[(i, j1, k)], -variables[(i, j2, k)]])
-                    clauses.append([-variables[(j1, i, k)], -variables[(j2, i, k)]])
-    var_count = max(abs(lit) for clause in clauses for lit in clause)
-    best_solution = square
-    best_empty = float('inf')
+        for j in range(len(square)):
+            for i1 in range(len(square)):
+                for i2 in range(i1+1, len(square)):
+                    clauses.append([-variables[(i1, j, k)], -variables[(i2, j, k)]])
+    var_count = id - 1
     for _ in range(max_restarts):
-        assignment = {var: random.choice([True, False]) for var in range(1, var_count+1)}
-        
-        for _ in range(max_flip):
-            unsatisfied = [clause for clause in clauses if not any(
-                (lit > 0 and assignment[lit]) or (lit < 0 and not assignment[-lit]) 
-                for lit in clause
-            )]
+        assignment = {}
+        for var in range(1, var_count + 1):
+            if var in presolved_vars:
+                for (i, j, k), var_id in variables.items():
+                    if var_id == var:
+                        assignment[var] = (square[i][j] == k)
+                        break
+            else:
+                assignment[var] = random.choice([True, False])
+        for _ in range(3 * var_count):
+            unsatisfied = []
+            for clause in clauses:
+                satisfied = False
+                for lit in clause:
+                    var = abs(lit)
+                    if (lit > 0 and assignment.get(var, False)) or (lit < 0 and not assignment.get(var, True)):
+                        satisfied = True
+                        break
+                if not satisfied:
+                    unsatisfied.append(clause)
             if not unsatisfied:
-                break
+                solution = [[0 for _ in range(len(square))] for _ in range(len(square))]
+                for i in range(len(square)):
+                    for j in range(len(square)):
+                        if (i, j) in presolved:
+                            solution[i][j] = square[i][j]
+                        else:
+                            for k in range(1, len(square)+1):
+                                if assignment.get(variables[(i, j, k)], False):
+                                    solution[i][j] = k
+                                    break
+                return solution
             clause = random.choice(unsatisfied)
             lit = random.choice(clause)
-            assignment[abs(lit)] = not assignment[abs(lit)]
-        current_solution = [row[:] for row in square]
-        valid = True
-        empty_count = 0
-        for (i, j, k), var in variables.items():
-            if (i, j) in presolved:
-                continue 
-            if assignment.get(var, False):
-                if (k in current_solution[i] or 
-                    k in [current_solution[x][j] for x in range(n)]):
-                    valid = False
-                    break
-        current_solution[i][j] = k
-        if not valid:
-            continue 
-        empty_count = sum(1 for i in range(n) for j in range(n) if current_solution[i][j] == 0)
-        if empty_count < best_empty:
-            best_solution = [row[:] for row in current_solution]
-            best_empty = empty_count
-            if best_empty == 0:
-                return best_solution
-    return best_solution
+            var = abs(lit)
+            if var not in presolved_vars:
+                assignment[var] = not assignment.get(var, False)
+    return square
 
-def test_threesat(testfile):
+def test_threesat(testfile, restarts =  10):
     test= getTestCase(testfile)
     runningTime = 0
     filledPercent = 0
     for i in range(5):
-        temp = copy.deepcopy(test)
+        temp = test
         startTime = time.perf_counter()
-        temp = threesat_schoning(temp)
+        temp = threesat_schoning(temp,restarts)
         stopTime = time.perf_counter()
         runningTime+= stopTime-startTime
         filledPercent += compareSquares(temp,test)
@@ -526,24 +521,24 @@ if __name__ == "__main__":
     time_ms,filled_percent = testLP("dataset1_5x5.csv")
     time_ms2,filled_percent2 = testLP("dataset2_10x10.csv")
     time_ms3,filled_percent3 = testLP("Dataset6_25x25.csv")
-    time_sat_ms,filled_sat_percent = test_threesat("dataset1_5x5.csv")
-    '''time_sat_ms2,filled_sat_percent2 = test_threesat("dataset2_10x10.csv")
-    time_sat_ms3,filled_sat_percent3 = test_threesat("Dataset6_25x25.csv")'''
-    print("\nOn 5x5 the average running time for Exact was:",time_exact_ms,"ms")
-    print("\nOn 10x10 the average running time for Exact  was:",time_exact_ms2,"ms")
-    print("\nOn 25x25 the average running time for Exact  was:",time_exact_ms3,"ms")
+    time_sat_ms,filled_sat_percent = test_threesat("dataset1_5x5.csv",100)
+    time_sat_ms2,filled_sat_percent2 = test_threesat("dataset2_10x10.csv",100)
+    time_sat_ms3,filled_sat_percent3 = test_threesat("Dataset6_25x25.csv",10)
+    print("\nOn 5x5 the average running time for Exact was:",time_exact_ms/1000,"seconds")
+    print("\nOn 10x10 the average running time for Exact  was:",time_exact_ms2/1000,"seconds")
+    print("\nOn 25x25 the average running time for Exact  was:",time_exact_ms3/1000,"seconds")
     print("\nOn 5x5 the average filled percent was: ", filled_percent, end = "%\n")
-    print("On 5x5 the average running time for LP Approximation was:",int(time_ms),"ms")
+    print("On 5x5 the average running time for LP Approximation was:",time_ms/1000,"seconds")
     print("\nOn 10x10 the average filled percent was: ", filled_percent2, end = "%\n")
-    print("On 10x10 the average running time for LP Approximation was:",int(time_ms2),"ms")
+    print("On 10x10 the average running time for LP Approximation was:",time_ms2/1000,"seconds")
     print("\nOn 25x25 the average filled percent was: ", filled_percent3, end = "%\n")
-    print("On 25x25 the average running time for LP Approximation was:",int(time_ms3),"ms")
+    print("On 25x25 the average running time for LP Approximation was:",time_ms3/1000,"seconds")
     print("\nOn 5x5 the average filled percent was: ", filled_sat_percent, end = "%\n")
-    print("On 5x5 the average running time for LP Approximation was:",int(time_sat_ms),"ms")
-    '''print("\nOn 10x10 the average filled percent was: ", filled_sat_percent2, end = "%\n")
-    print("On 10x10 the average running time for LP Approximation was:",int(time_sat_ms2),"ms")
+    print("On 5x5 the average running time for LP Approximation was:",time_sat_ms/1000,"seconds")
+    print("\nOn 10x10 the average filled percent was: ", filled_sat_percent2, end = "%\n")
+    print("On 10x10 the average running time for LP Approximation was:",time_sat_ms/1000,"seconds")
     print("\nOn 25x25 the average filled percent was: ", filled_sat_percent3, end = "%\n")
-    print("On 25x25 the average running time for LP Approximation was:",int(time_sat_ms3),"ms")'''
+    print("On 25x25 the average running time for LP Approximation was:",time_sat_ms3/1000,"seconds")
     dataset_files = {
         "5x5": "dataset1_5x5.csv",
         "10x10": "dataset2_10x10.csv",
