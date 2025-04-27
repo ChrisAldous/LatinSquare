@@ -55,6 +55,7 @@ def easy_solve(square):
                     for r in range(n):
                         if isinstance(latin_square[r][col], set):
                             latin_square[r][col].discard(value)
+                            
 
     return latin_square
 
@@ -113,11 +114,8 @@ def validate_latin_square(square):
 
 
 
-<<<<<<< HEAD
+
 def getTestCase(testfile, forexact = False):    
-=======
-def getTestCase(testfile):    
->>>>>>> fe130fe9e04e3d2c337420ed3be28fa498f441cd
     with open(testfile,"r") as f:
         count = 0
         reader = csv.reader(f)
@@ -395,6 +393,109 @@ def run_trials(algorithm_fn, grid, runs=5):
     avg_time = sum(time_list) / runs
     return avg_filled, avg_time
 
+def threesat_schoning(square, max_flip=1000, max_restarts=10):
+    square = [row[:] for row in square]
+    for i in range(len(square)):
+        for j in range(len(square)):
+            if square[i][j] != 0:
+                val = square[i][j]
+                for x in range(len(square)):
+                    if isinstance(square[i][x], set) and val in square[i][x]:
+                        square[i][x].remove(val)
+                    if isinstance(square[x][j], set) and val in square[x][j]:
+                        square[x][j].remove(val)
+    variables = {}
+    id = 1
+    n = len(square)
+    for i in range(n):
+        for j in range(n):
+            for k in range(1, n+1):
+                variables[(i, j, k)] = id
+                id += 1
+    clauses = []
+    s = max(variables.values()) + 1
+    presolved = set()
+    for i in range(n):
+        for j in range(n):
+            if square[i][j] != 0:
+                k = square[i][j]
+                presolved.add((i, j))
+                clauses.append([variables[(i, j, k)]]) 
+    for i in range(n):
+        for j in range(n):
+            if (i, j) in presolved:
+                continue
+            cell_vars = [variables[(i, j, k)] for k in range(1, n+1)]
+            if len(cell_vars) <= 3:
+                clauses.append(cell_vars)
+            else:
+                clauses.append([cell_vars[0], cell_vars[1], s])
+                for idx in range(2, len(cell_vars)-1):
+                    clauses.append([-s, cell_vars[idx], s+1])
+                    s += 1
+                clauses.append([-s, cell_vars[-2], cell_vars[-1]])
+                s += 1
+            for k1 in range(1, n+1):
+                for k2 in range(k1+1, n+1):
+                    clauses.append([-variables[(i, j, k1)], -variables[(i, j, k2)]])
+    for i in range(n):
+        for k in range(1, n+1):
+            for j1 in range(n):
+                for j2 in range(j1+1, n):
+                    clauses.append([-variables[(i, j1, k)], -variables[(i, j2, k)]])
+                    clauses.append([-variables[(j1, i, k)], -variables[(j2, i, k)]])
+    var_count = max(abs(lit) for clause in clauses for lit in clause)
+    best_solution = square
+    best_empty = float('inf')
+    for _ in range(max_restarts):
+        assignment = {var: random.choice([True, False]) for var in range(1, var_count+1)}
+        
+        for _ in range(max_flip):
+            unsatisfied = [clause for clause in clauses if not any(
+                (lit > 0 and assignment[lit]) or (lit < 0 and not assignment[-lit]) 
+                for lit in clause
+            )]
+            if not unsatisfied:
+                break
+            clause = random.choice(unsatisfied)
+            lit = random.choice(clause)
+            assignment[abs(lit)] = not assignment[abs(lit)]
+        current_solution = [row[:] for row in square]
+        valid = True
+        empty_count = 0
+        for (i, j, k), var in variables.items():
+            if (i, j) in presolved:
+                continue 
+            if assignment.get(var, False):
+                if (k in current_solution[i] or 
+                    k in [current_solution[x][j] for x in range(n)]):
+                    valid = False
+                    break
+        current_solution[i][j] = k
+        if not valid:
+            continue 
+        empty_count = sum(1 for i in range(n) for j in range(n) if current_solution[i][j] == 0)
+        if empty_count < best_empty:
+            best_solution = [row[:] for row in current_solution]
+            best_empty = empty_count
+            if best_empty == 0:
+                return best_solution
+    return best_solution
+
+def test_threesat(testfile):
+    test= getTestCase(testfile)
+    runningTime = 0
+    filledPercent = 0
+    for i in range(5):
+        temp = copy.deepcopy(test)
+        startTime = time.perf_counter()
+        temp = threesat_schoning(temp)
+        stopTime = time.perf_counter()
+        runningTime+= stopTime-startTime
+        filledPercent += compareSquares(temp,test)
+    filledPercent = filledPercent/5
+    
+    return int(runningTime/5*1000), int(filledPercent)
 if __name__ == "__main__":
 
                     
@@ -419,28 +520,34 @@ if __name__ == "__main__":
     
 
 
-    
     time_exact_ms = testExact("dataset1_5x5.csv")
     time_exact_ms2 = testExact("dataset2_10x10.csv")
-    time_exact_ms3 = testExact("dataset3_15x15.csv")
+    time_exact_ms3 = testExact("Dataset6_25x25.csv")
     time_ms,filled_percent = testLP("dataset1_5x5.csv")
     time_ms2,filled_percent2 = testLP("dataset2_10x10.csv")
-    time_ms3,filled_percent3 = testLP("dataset3_15x15.csv")
+    time_ms3,filled_percent3 = testLP("Dataset6_25x25.csv")
+    time_sat_ms,filled_sat_percent = test_threesat("dataset1_5x5.csv")
+    '''time_sat_ms2,filled_sat_percent2 = test_threesat("dataset2_10x10.csv")
+    time_sat_ms3,filled_sat_percent3 = test_threesat("Dataset6_25x25.csv")'''
     print("\nOn 5x5 the average running time for Exact was:",time_exact_ms,"ms")
     print("\nOn 10x10 the average running time for Exact  was:",time_exact_ms2,"ms")
-    print("\nOn 15x15 the average running time for Exact  was:",time_exact_ms3,"ms")
+    print("\nOn 25x25 the average running time for Exact  was:",time_exact_ms3,"ms")
     print("\nOn 5x5 the average filled percent was: ", filled_percent, end = "%\n")
     print("On 5x5 the average running time for LP Approximation was:",int(time_ms),"ms")
     print("\nOn 10x10 the average filled percent was: ", filled_percent2, end = "%\n")
     print("On 10x10 the average running time for LP Approximation was:",int(time_ms2),"ms")
-    print("\nOn 15x15 the average filled percent was: ", filled_percent3, end = "%\n")
-    print("On 15x15 the average running time for LP Approximation was:",int(time_ms3),"ms")
-
-    #print("The average running time for Exact was",time_exact_ms,"ms")
+    print("\nOn 25x25 the average filled percent was: ", filled_percent3, end = "%\n")
+    print("On 25x25 the average running time for LP Approximation was:",int(time_ms3),"ms")
+    print("\nOn 5x5 the average filled percent was: ", filled_sat_percent, end = "%\n")
+    print("On 5x5 the average running time for LP Approximation was:",int(time_sat_ms),"ms")
+    '''print("\nOn 10x10 the average filled percent was: ", filled_sat_percent2, end = "%\n")
+    print("On 10x10 the average running time for LP Approximation was:",int(time_sat_ms2),"ms")
+    print("\nOn 25x25 the average filled percent was: ", filled_sat_percent3, end = "%\n")
+    print("On 25x25 the average running time for LP Approximation was:",int(time_sat_ms3),"ms")'''
     dataset_files = {
         "5x5": "dataset1_5x5.csv",
         "10x10": "dataset2_10x10.csv",
-        "15x15": "dataset3_15x15.csv"
+        "25x25": "Dataset6_25x25.csv"
     }
     for label, filename in dataset_files.items():
         print(f"\nRunning for dataset {label}...")
